@@ -915,6 +915,33 @@ struct FirrtlWorker {
 				continue;
 			}
 
+			if (cell->type.in(ID($adffe))) {
+				bool clkpol = cell->parameters.at(ID::CLK_POLARITY).as_bool();
+				if (clkpol == false)
+					log_error("Negative edge clock on FF %s.%s.\n", log_id(module), log_id(cell));
+				bool resetpol = cell->parameters.at(ID::ARST_POLARITY).as_bool();
+				if (resetpol == false)
+					log_error("Negative edge AsyncReset on FF %s.%s.\n", log_id(module), log_id(cell));
+				bool enpol = cell->parameters.at(ID::EN_POLARITY).as_bool();
+				if (enpol == false)
+					log_error("Negative edge En on FF %s.%s.\n", log_id(module), log_id(cell));
+
+				int width = cell->parameters.at(ID::WIDTH).as_int();
+				string expr = make_expr(cell->getPort(ID::D));
+				string clk_expr = "asClock(" + make_expr(cell->getPort(ID::CLK)) + ")";
+
+				string reset_expr = "with : (reset => (asAsyncReset(" + make_expr(cell->getPort(ID::ARST)) + "), " +
+						    make_expr(cell->parameters.at(ID::ARST_VALUE)) + "))";
+				wire_decls.push_back(stringf("%sreg %s: UInt<%d>, %s %s %s\n", indent.c_str(), y_id.c_str(), width, clk_expr.c_str(),
+							     reset_expr.c_str(), cellFileinfo.c_str()));
+
+				string en_expr = "mux(" + make_expr(cell->getPort(ID::EN)) + ", " + expr + ", " + y_id + ")";
+				cell_exprs.push_back(stringf("%s%s <= %s %s\n", indent.c_str(), y_id.c_str(), en_expr.c_str(), cellFileinfo.c_str()));
+				register_reverse_wire_map(y_id, cell->getPort(ID::Q));
+
+				continue;
+			}
+
 			if (cell->type.in(ID($dff))) {
 				bool clkpol = cell->parameters.at(ID::CLK_POLARITY).as_bool();
 				if (clkpol == false)
