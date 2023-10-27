@@ -923,8 +923,9 @@ struct FirrtlWorker {
 				if (resetpol == false)
 					log_error("Negative edge AsyncReset on FF %s.%s.\n", log_id(module), log_id(cell));
 				bool enpol = cell->parameters.at(ID::EN_POLARITY).as_bool();
+				string cond_expr = make_expr(cell->getPort(ID::EN));
 				if (enpol == false)
-					log_error("Negative edge En on FF %s.%s.\n", log_id(module), log_id(cell));
+					cond_expr = "not(" + cond_expr + ")";
 
 				int width = cell->parameters.at(ID::WIDTH).as_int();
 				string expr = make_expr(cell->getPort(ID::D));
@@ -935,7 +936,7 @@ struct FirrtlWorker {
 				wire_decls.push_back(stringf("%sreg %s: UInt<%d>, %s %s %s\n", indent.c_str(), y_id.c_str(), width, clk_expr.c_str(),
 							     reset_expr.c_str(), cellFileinfo.c_str()));
 
-				string en_expr = "mux(" + make_expr(cell->getPort(ID::EN)) + ", " + expr + ", " + y_id + ")";
+				string en_expr = "mux(" + cond_expr + ", " + expr + ", " + y_id + ")";
 				cell_exprs.push_back(stringf("%s%s <= %s %s\n", indent.c_str(), y_id.c_str(), en_expr.c_str(), cellFileinfo.c_str()));
 				register_reverse_wire_map(y_id, cell->getPort(ID::Q));
 
@@ -995,9 +996,9 @@ struct FirrtlWorker {
 				if (cell->getParam(ID::B_SIGNED).as_bool()) {
 					// We generate a left or right shift based on the sign of b.
 					std::string dshl =
-					  stringf("bits(dshl(%s, %s), 0, %d)", a_expr.c_str(), gen_dshl(b_expr, b_width).c_str(), y_width);
+					  stringf("bits(dshl(%s, %s), %d, 0)", a_expr.c_str(), gen_dshl(b_expr, b_width).c_str(), y_width);
 					std::string dshr = stringf("dshr(%s, %s)", a_expr.c_str(), b_string);
-					expr = stringf("mux(%s < 0, %s, %s)", b_string, dshl.c_str(), dshr.c_str());
+					expr = stringf("mux(lt(%s, UInt(0)), %s, %s)", b_string, dshl.c_str(), dshr.c_str());
 				} else {
 					expr = stringf("dshr(%s, %s)", a_expr.c_str(), b_string);
 				}
